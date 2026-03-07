@@ -1,0 +1,8 @@
+.env
+data/
+__pycache__/
+*.py[cod]
+*.sqlite
+.venv/
+venv/
+.env.local
