@@ -53,6 +53,62 @@ Depois de rodar `deploy_commands.py`, reinicie o bot (`python bot.py`) se ele j�
 - **#news**: o bot posta automaticamente novos avisos dos cursos (polling por course_id) e também faz uma verificação diária em horário configurável (padrão 18h). Para reenviar **todas** as notícias uma vez (por exemplo na primeira vez ou após limpar o histórico), apague o arquivo `data/sent_ids.json` (ou apague só a chave `announcement_ids` dentro dele) e reinicie o bot; na próxima execução ele enviará todos os avisos e voltará a evitar duplicatas.
 - **#prazos**: o bot posta lembretes de entregas X dias antes do prazo; além disso, qualquer um pode usar o comando `/proximas-entregas` (e opcionalmente `/proximas-entregas dias:N`) para listar as próximas entregas por curso.
 
+## Deploy em produção (VPS)
+
+Com o bot rodando como serviço systemd no servidor, use os comandos abaixo.
+
+### Iniciar o bot
+
+```bash
+sudo systemctl start canvas-bot
+```
+
+### Parar o bot
+
+```bash
+sudo systemctl stop canvas-bot
+```
+
+### Subir alterações
+
+1. Atualizar o código (ex.: via Git):
+
+   ```bash
+   cd ~/apps/canvas-discord-bot
+   git pull
+   ```
+
+2. Instalar dependências novas (se `requirements.txt` mudou):
+
+   ```bash
+   source venv/bin/activate
+   pip install -r requirements.txt
+   deactivate
+   ```
+
+3. Reiniciar o serviço:
+
+   ```bash
+   sudo systemctl restart canvas-bot
+   ```
+
+### Verificar status e logs
+
+```bash
+sudo systemctl status canvas-bot
+journalctl -u canvas-bot -f
+```
+
+| Ação | Comando |
+|------|---------|
+| Iniciar | `sudo systemctl start canvas-bot` |
+| Parar | `sudo systemctl stop canvas-bot` |
+| Reiniciar | `sudo systemctl restart canvas-bot` |
+| Status | `sudo systemctl status canvas-bot` |
+| Logs em tempo real | `journalctl -u canvas-bot -f` |
+
+---
+
 ## Estrutura
 
 - `bot.py` – entrada do bot e agendamento das tarefas

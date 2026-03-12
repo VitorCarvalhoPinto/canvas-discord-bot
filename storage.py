@@ -2,7 +2,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Set
+from typing import Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,7 @@ class Storage:
         self.path = path
         self._announcement_ids: Set[int] = set()
         self._reminder_keys: Set[str] = set()  # e.g. "assignment_123_course_456"
+        self._preferencias_message_id: Optional[int] = None
         self._load()
 
     def _load(self) -> None:
@@ -27,6 +28,8 @@ class Storage:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             self._announcement_ids = set(data.get("announcement_ids", []))
             self._reminder_keys = set(data.get("reminder_keys", []))
+            mid = data.get("preferencias_message_id")
+            self._preferencias_message_id = int(mid) if mid else None
         except Exception as e:
             logger.warning("Could not load storage %s: %s", self.path, e)
 
@@ -35,6 +38,7 @@ class Storage:
         data = {
             "announcement_ids": list(self._announcement_ids),
             "reminder_keys": list(self._reminder_keys),
+            "preferencias_message_id": self._preferencias_message_id,
         }
         self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -61,3 +65,11 @@ class Storage:
     @staticmethod
     def reminder_key(plannable_type: str, plannable_id: int, course_id: int) -> str:
         return f"{plannable_type}_{plannable_id}_course_{course_id}"
+
+    def get_preferencias_message_id(self) -> Optional[int]:
+        """Message ID of the preferencias embed in the channel."""
+        return self._preferencias_message_id
+
+    def set_preferencias_message_id(self, message_id: int) -> None:
+        self._preferencias_message_id = message_id
+        self._save()

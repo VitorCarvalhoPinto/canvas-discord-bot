@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import config
 from canvas.client import CanvasClient
 from discord_bot.commands import (
+    ensure_preferencias_channel_message,
     get_course_ids_and_names,
     setup_ajuda,
     setup_avisos,
@@ -17,6 +18,7 @@ from discord_bot.commands import (
     setup_debug_cache,
     setup_debug_news,
     setup_limpar_chat,
+    setup_preferencias,
     setup_proximas_entregas,
 )
 from discord_bot.tasks import run_announcements_task, run_reminders_task
@@ -115,6 +117,8 @@ def main():
         setup_avisos(tree, _canvas_client, course_resolver)
         setup_cursos(tree, _canvas_client, course_resolver)
         setup_ajuda(tree)
+        setup_preferencias(tree, bot)
+        await ensure_preferencias_channel_message(bot, _storage)
         setup_limpar_chat(tree)
         setup_debug_cache(tree)
         setup_debug_news(

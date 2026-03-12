@@ -19,6 +19,7 @@ from discord_bot.commands import (
     setup_debug_cache,
     setup_debug_news,
     setup_limpar_chat,
+    setup_preferencias,
     setup_proximas_entregas,
 )
 from storage import Storage
@@ -55,6 +56,7 @@ def main():
             setup_avisos(tree, canvas_client, _empty_course_resolver)
             setup_cursos(tree, canvas_client, _empty_course_resolver)
             setup_ajuda(tree)
+            setup_preferencias(tree, client)
             setup_limpar_chat(tree)
             setup_debug_cache(tree)
             setup_debug_news(

@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 
 import cache
+import config
 from canvas.client import CanvasClient
 from canvas.models import Announcement, Assignment
 from discord_bot.embeds import embed_avisos, embed_cursos, embed_proximas_entregas
@@ -187,6 +188,142 @@ def setup_cursos(
         except Exception as e:
             logger.exception("cursos error")
             await interaction.followup.send(MSG_INDISPONIVEL, ephemeral=True)
+
+
+PREF_BUTTON_PREFIX = "pref:"
+
+
+def _make_preferencias_view() -> "PreferenciasView":
+    """Build PreferenciasView from config.ROLE_PREFERENCES."""
+    role_map: Dict[str, int] = {}
+    label_map: Dict[str, str] = {}
+    for suffix, label, role_id in config.ROLE_PREFERENCES:
+        role_map[suffix] = role_id
+        label_map[suffix] = label
+    return PreferenciasView(role_map, label_map)
+
+
+class PreferenciasView(discord.ui.View):
+    """View with buttons for development preference roles. Toggle: add/remove role. Ephemeral feedback."""
+
+    def __init__(
+        self,
+        role_map: Dict[str, int],
+        label_map: Dict[str, str],
+    ):
+        super().__init__(timeout=None)
+        self._role_map = role_map
+        self._label_map = label_map
+        for suffix in role_map:
+            custom_id = f"{PREF_BUTTON_PREFIX}{suffix}"
+
+            async def btn_callback(interaction: discord.Interaction, suf: str = suffix):
+                await self._handle_button(interaction, f"{PREF_BUTTON_PREFIX}{suf}")
+
+            btn = discord.ui.Button(
+                label=label_map[suffix],
+                custom_id=custom_id,
+                style=discord.ButtonStyle.primary,
+            )
+            btn.callback = btn_callback
+            self.add_item(btn)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True
+
+    async def _handle_button(self, interaction: discord.Interaction, custom_id: str):
+        await interaction.response.defer(ephemeral=True)
+        suffix = custom_id[len(PREF_BUTTON_PREFIX) :]
+        if suffix not in self._role_map:
+            await interaction.followup.send("Cargo não configurado.", ephemeral=True)
+            return
+        role_id = self._role_map[suffix]
+        label = self._label_map.get(suffix, suffix)
+        guild = interaction.guild
+        if not guild:
+            await interaction.followup.send(
+                "Este comando só funciona em um servidor.",
+                ephemeral=True,
+            )
+            return
+        member = interaction.user
+        if isinstance(member, discord.User):
+            member = guild.get_member(member.id)
+        if not member:
+            await interaction.followup.send(
+                "Não foi possível obter seu cargo.",
+                ephemeral=True,
+            )
+            return
+        try:
+            new_role = guild.get_role(role_id)
+            if not new_role:
+                await interaction.followup.send(
+                    f"Cargo '{label}' não encontrado no servidor.",
+                    ephemeral=True,
+                )
+                return
+            if new_role in member.roles:
+                await member.remove_roles(new_role)
+                msg = f"Você mudou de ideia sobre sua preferência em **{label}**."
+            else:
+                await member.add_roles(new_role)
+                msg = f"Você prefere trabalhar com **{label}**!."
+            await interaction.followup.send(msg, ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "Sem permissão para gerenciar cargos. Verifique se o cargo do bot está acima dos cargos de preferência.",
+                ephemeral=True,
+            )
+        except discord.HTTPException as e:
+            logger.exception("preferencias button error")
+            await interaction.followup.send(
+                f"Erro ao atribuir cargo: {e}",
+                ephemeral=True,
+            )
+
+
+def setup_preferencias(tree: app_commands.CommandTree, bot: discord.Client) -> None:
+    """Register persistent View for preference role buttons (no slash command)."""
+    if config.ROLE_PREFERENCES:
+        persistent_view = _make_preferencias_view()
+        bot.add_view(persistent_view)
+
+
+async def ensure_preferencias_channel_message(
+    bot: discord.Client, storage: Storage
+) -> None:
+    """Ensure the preferencias embed with buttons exists in CHANNEL_PREFERENCIAS_ID."""
+    if not config.CHANNEL_PREFERENCIAS_ID or not config.ROLE_PREFERENCES:
+        return
+    try:
+        channel = await bot.fetch_channel(config.CHANNEL_PREFERENCIAS_ID)
+        if not channel or not isinstance(channel, discord.TextChannel):
+            return
+        stored_id = storage.get_preferencias_message_id()
+        if stored_id:
+            try:
+                msg = await channel.fetch_message(stored_id)
+                if msg and msg.author == bot.user:
+                    return
+            except (discord.NotFound, discord.HTTPException):
+                pass
+        embed = discord.Embed(
+            title="Preferências de desenvolvimento",
+            description=(
+                "Clique nos botões abaixo para escolher suas áreas de preferência no desenvolvimento do jogo. "
+                "Você pode selecionar múltiplos cargos."
+            ),
+            color=discord.Color(0x3B82F6),
+        )
+        view = _make_preferencias_view()
+        message = await channel.send(embed=embed, view=view)
+        storage.set_preferencias_message_id(message.id)
+        logger.info("Posted preferencias message in channel %s", config.CHANNEL_PREFERENCIAS_ID)
+    except discord.Forbidden:
+        logger.warning("No permission to post in preferencias channel %s", config.CHANNEL_PREFERENCIAS_ID)
+    except Exception as e:
+        logger.exception("ensure_preferencias_channel_message: %s", e)
 
 
 def setup_limpar_chat(tree: app_commands.CommandTree) -> None:
